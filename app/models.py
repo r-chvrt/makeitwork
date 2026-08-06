@@ -27,6 +27,8 @@ class JobOffer(BaseModel):
     pin_status: Optional[PinStatus] = None   # rempli côté serveur selon les épinglés
     also_on: list[AltLink] = []              # même offre trouvée sur d'autres sites
     relevance: int = 0                       # score de pertinence vs mots-clés
+    category: Optional[str] = None           # catégorie de métier (classifieur)
+    salary_annual: Optional[int] = None      # salaire mini annualisé en €, pour les filtres
 
 
 class PinRequest(BaseModel):

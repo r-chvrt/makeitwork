@@ -33,7 +33,7 @@
       <div class="fields">
         <div class="field grow">
           <label for="q">Métier / mots-clés</label>
-          <input id="q" type="text" placeholder="ex : développeur python" required>
+          <input id="q" type="text" placeholder="ex : développeur python (vide = toutes les offres)">
         </div>
         <div class="field grow autocomplete">
           <label for="location">Zone géographique</label>
@@ -69,6 +69,20 @@
       <div class="toolbar-filters">
         <label><input type="checkbox" id="filter-salary"> Salaire indiqué</label>
         <label><input type="checkbox" id="filter-remote"> Télétravail</label>
+        <select id="filter-category" title="Catégorie de métier">
+          <option value="">Toutes catégories</option>
+        </select>
+        <select id="filter-salary-range" title="Tranche de salaire">
+          <option value="">Tous salaires</option>
+          <option value="0-30">&lt; 30 k€ / an</option>
+          <option value="30-40">30 – 40 k€ / an</option>
+          <option value="40-50">40 – 50 k€ / an</option>
+          <option value="50-70">50 – 70 k€ / an</option>
+          <option value="70-9999">&gt; 70 k€ / an</option>
+        </select>
+        <select id="filter-contract" title="Type de contrat">
+          <option value="">Tous contrats</option>
+        </select>
         <select id="sort">
           <option value="date">Plus récentes d'abord</option>
           <option value="relevance">Pertinence</option>

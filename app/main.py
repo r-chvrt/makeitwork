@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db
+from .categorize import categorize, salary_to_annual
 from .dedup import dedup_offers
 from .models import PinRequest, SearchResponse
 from .relevance import apply_relevance
@@ -34,12 +35,16 @@ def _user(request: Request) -> str:
 @app.get("/api/search", response_model=SearchResponse)
 async def search(
     request: Request,
-    q: str = Query(..., min_length=1, description="Métier / mots-clés"),
+    q: str = Query("", description="Métier / mots-clés (vide = toutes les offres de la zone)"),
     location: str = Query("", description="Zone géographique (ville, département...)"),
     sources: str = Query("wttj,indeed,hellowork", description="Sources séparées par des virgules"),
     limit: int = Query(15, ge=1, le=30, description="Nombre max d'offres par source"),
     radius_km: int = Query(30, ge=5, le=100, description="Rayon de recherche en km"),
 ):
+    q = q.strip()
+    if not q and not location.strip():
+        return SearchResponse(results=[], errors={}, took_ms=0)
+
     wanted = [s.strip() for s in sources.split(",") if s.strip() in SCRAPERS]
     started = time.perf_counter()
 
@@ -64,6 +69,11 @@ async def search(
 
     # écarter les offres sans rapport avec les mots-clés
     results = apply_relevance(results, q)
+
+    # catégorie de métier et salaire annualisé (pour les filtres du front)
+    for offer in results:
+        offer.category = categorize(offer)
+        offer.salary_annual = salary_to_annual(offer.salary)
 
     # tri par date décroissante, offres sans date à la fin
     results.sort(key=lambda o: o.published_at or "0000-00-00", reverse=True)

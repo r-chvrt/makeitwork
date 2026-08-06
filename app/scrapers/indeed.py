@@ -31,7 +31,7 @@ HEADERS = {
 QUERY_TEMPLATE = """
 query JobSearch {{
   jobSearch(
-    what: {what}
+    {what_arg}
     location: {{where: {where}, radius: {radius}, radiusUnit: KILOMETERS}}
     limit: {limit}
     sort: RELEVANCE
@@ -79,7 +79,7 @@ def _parse_remote(labels: list[str]) -> str | None:
 async def search_indeed(query: str, location: str = "", limit: int = 15,
                         radius_km: int = 30) -> list[JobOffer]:
     gql = QUERY_TEMPLATE.format(
-        what=_gql_str(query),
+        what_arg=f"what: {_gql_str(query)}" if query.strip() else "",
         where=_gql_str(location or "France"),
         radius=radius_km,
         limit=limit,

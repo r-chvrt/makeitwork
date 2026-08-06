@@ -25,6 +25,9 @@
   const countEl = document.getElementById("result-count");
   const filterSalary = document.getElementById("filter-salary");
   const filterRemote = document.getElementById("filter-remote");
+  const filterCategory = document.getElementById("filter-category");
+  const filterSalaryRange = document.getElementById("filter-salary-range");
+  const filterContract = document.getElementById("filter-contract");
   const sortSel = document.getElementById("sort");
 
   const viewSearch = document.getElementById("view-search");
@@ -260,7 +263,7 @@
     const sources = [...form.querySelectorAll('input[name="source"]:checked')]
       .map((c) => c.value);
 
-    if (!q || sources.length === 0) return;
+    if ((!q && !location) || sources.length === 0) return;
 
     btn.disabled = true;
     loader.classList.remove("hidden");
@@ -279,6 +282,7 @@
 
       allResults = data.results;
       renderErrors(data.errors);
+      populateFilters();
       render();
       toolbar.classList.remove("hidden");
     } catch (err) {
@@ -291,8 +295,42 @@
     }
   });
 
-  [filterSalary, filterRemote, sortSel].forEach((el) =>
+  [filterSalary, filterRemote, filterCategory, filterSalaryRange,
+   filterContract, sortSel].forEach((el) =>
     el.addEventListener("change", render));
+
+  /* Alimente les selects catégorie et contrat à partir des résultats. */
+  function populateFilters() {
+    fillSelect(filterCategory, "Toutes catégories",
+      countBy(allResults, (o) => o.category));
+    fillSelect(filterContract, "Tous contrats",
+      countBy(allResults, (o) => o.contract));
+    filterSalaryRange.value = "";
+  }
+
+  function countBy(list, keyFn) {
+    const counts = new Map();
+    for (const item of list) {
+      const key = keyFn(item);
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }
+
+  function fillSelect(select, allLabel, entries) {
+    select.innerHTML = "";
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = allLabel;
+    select.appendChild(all);
+    for (const [value, count] of entries) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = value + " (" + count + ")";
+      select.appendChild(opt);
+    }
+    select.value = "";
+  }
 
   function renderErrors(errors) {
     errorsEl.innerHTML = "";
@@ -318,6 +356,15 @@
     if (filterSalary.checked) list = list.filter((o) => o.salary);
     if (filterRemote.checked)
       list = list.filter((o) => o.remote && o.remote !== "non");
+    if (filterCategory.value)
+      list = list.filter((o) => o.category === filterCategory.value);
+    if (filterContract.value)
+      list = list.filter((o) => o.contract === filterContract.value);
+    if (filterSalaryRange.value) {
+      const [min, max] = filterSalaryRange.value.split("-").map(Number);
+      list = list.filter((o) => o.salary_annual != null &&
+        o.salary_annual >= min * 1000 && o.salary_annual < max * 1000);
+    }
     if (sortSel.value === "date") {
       list.sort((a, b) => (b.published_at || "").localeCompare(a.published_at || ""));
     } else if (sortSel.value === "relevance") {

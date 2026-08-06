@@ -33,6 +33,8 @@ API : `GET /api/pins` · `PUT /api/pins` (`{"status": "a_postuler|postule|entret
 - **Filtre de pertinence** : les offres sans rapport avec les mots-clés (renvoyées par les sites quand ils manquent de résultats) sont écartées ; tri « Pertinence » disponible
 - **Sessions par pseudo** : à l'ouverture, choisis un pseudo (aucun compte, aucun mot de passe) ; reviens avec le même pseudo et tes épinglés sont là. Le pseudo est envoyé en en-tête `X-Pseudo` et prime sur `X-Forwarded-User`.
 - **Légende** des pastilles d'épinglage visible dans les deux vues
+- **Recherche sans mots-clés** : laisser le champ métier vide pour voir toutes les offres d'une ville
+- **Filtres avancés** : catégorie de métier (classifieur par mots-clés du titre, homogène sur les 3 sites), tranche de salaire (montants mensuels / journaliers / horaires annualisés automatiquement) et type de contrat — les listes se remplissent selon les résultats, avec compteurs
 
 ## Déploiement Docker (derrière Traefik)
 

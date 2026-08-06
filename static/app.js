@@ -1,4 +1,4 @@
-/* MakeItWork — logique front : thème, onglets, recherche, épinglés. */
+/* MakeItWork — logique front : thème, pseudo, onglets, recherche, autocomplétion, épinglés. */
 (() => {
   "use strict";
 
@@ -35,6 +35,13 @@
   const pinnedSections = document.getElementById("pinned-sections");
   const pinsEmpty = document.getElementById("pins-empty");
 
+  const pseudoModal = document.getElementById("pseudo-modal");
+  const pseudoInput = document.getElementById("pseudo-input");
+  const pseudoNameEl = document.getElementById("pseudo-name");
+
+  const locationInput = document.getElementById("location");
+  const cityList = document.getElementById("city-list");
+
   const SOURCE_NAMES = {
     wttj: "Welcome to the Jungle",
     indeed: "Indeed",
@@ -53,8 +60,132 @@
     entretien: "Entretien",
   };
 
-  let allResults = [];  // résultats de la dernière recherche
+  let allResults = [];   // résultats de la dernière recherche
   let pinnedOffers = []; // offres épinglées (depuis le serveur)
+
+  /* ---------- Pseudo (session légère, stockée côté serveur) ---------- */
+  let pseudo = (localStorage.getItem("pseudo") || "").trim();
+
+  function apiHeaders(extra) {
+    const h = Object.assign({}, extra || {});
+    if (pseudo) h["X-Pseudo"] = pseudo;
+    return h;
+  }
+
+  function updatePseudoChip() {
+    pseudoNameEl.textContent = pseudo || "invité";
+  }
+
+  function openPseudoModal() {
+    pseudoInput.value = pseudo;
+    pseudoModal.classList.remove("hidden");
+    pseudoInput.focus();
+  }
+
+  function closePseudoModal() {
+    pseudoModal.classList.add("hidden");
+    localStorage.setItem("pseudoAsked", "1");
+  }
+
+  function savePseudo() {
+    pseudo = pseudoInput.value.trim().toLowerCase().slice(0, 40);
+    localStorage.setItem("pseudo", pseudo);
+    updatePseudoChip();
+    closePseudoModal();
+    loadPins();
+  }
+
+  document.getElementById("pseudo-chip").addEventListener("click", openPseudoModal);
+  document.getElementById("pseudo-save").addEventListener("click", savePseudo);
+  document.getElementById("pseudo-skip").addEventListener("click", () => {
+    closePseudoModal();
+  });
+  pseudoInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") savePseudo();
+    if (e.key === "Escape") closePseudoModal();
+  });
+
+  if (!pseudo && !localStorage.getItem("pseudoAsked")) openPseudoModal();
+  updatePseudoChip();
+
+  /* ---------- Autocomplétion ville ---------- */
+  let cityItems = [];
+  let cityHighlight = -1;
+  let cityDebounce = null;
+  let cityAbort = null;
+
+  function hideCityList() {
+    cityList.classList.add("hidden");
+    cityList.innerHTML = "";
+    cityItems = [];
+    cityHighlight = -1;
+  }
+
+  function selectCity(index) {
+    const city = cityItems[index];
+    if (!city) return;
+    locationInput.value = city.nom;
+    hideCityList();
+    locationInput.focus();
+  }
+
+  function renderCityList() {
+    cityList.innerHTML = "";
+    if (cityItems.length === 0) { hideCityList(); return; }
+    cityItems.forEach((c, i) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      if (i === cityHighlight) li.classList.add("highlighted");
+      const name = document.createElement("span");
+      name.textContent = c.nom;
+      const meta = document.createElement("span");
+      meta.className = "city-meta";
+      meta.textContent = c.cp + (c.dep ? " · " + c.dep : "");
+      li.append(name, meta);
+      // mousedown (pas click) pour passer avant le blur de l'input
+      li.addEventListener("mousedown", (e) => { e.preventDefault(); selectCity(i); });
+      cityList.appendChild(li);
+    });
+    cityList.classList.remove("hidden");
+  }
+
+  locationInput.addEventListener("input", () => {
+    const q = locationInput.value.trim();
+    clearTimeout(cityDebounce);
+    if (q.length < 2) { hideCityList(); return; }
+    cityDebounce = setTimeout(async () => {
+      try {
+        if (cityAbort) cityAbort.abort();
+        cityAbort = new AbortController();
+        const resp = await fetch("/api/cities?q=" + encodeURIComponent(q),
+                                 { signal: cityAbort.signal });
+        if (!resp.ok) return;
+        cityItems = (await resp.json()).cities;
+        cityHighlight = cityItems.length > 0 ? 0 : -1;
+        renderCityList();
+      } catch { /* requête annulée ou réseau : on ignore */ }
+    }, 220);
+  });
+
+  locationInput.addEventListener("keydown", (e) => {
+    if (cityList.classList.contains("hidden")) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      cityHighlight = (cityHighlight + 1) % cityItems.length;
+      renderCityList();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      cityHighlight = (cityHighlight - 1 + cityItems.length) % cityItems.length;
+      renderCityList();
+    } else if (e.key === "Enter") {
+      e.preventDefault(); // ne pas soumettre le formulaire : on sélectionne la ville
+      selectCity(cityHighlight >= 0 ? cityHighlight : 0);
+    } else if (e.key === "Escape") {
+      hideCityList();
+    }
+  });
+
+  locationInput.addEventListener("blur", () => setTimeout(hideCityList, 150));
 
   /* ---------- Onglets ---------- */
   function showView(name) {
@@ -70,7 +201,7 @@
   /* ---------- Épinglés (serveur) ---------- */
   async function loadPins() {
     try {
-      const resp = await fetch("/api/pins");
+      const resp = await fetch("/api/pins", { headers: apiHeaders() });
       if (!resp.ok) throw new Error(resp.status);
       pinnedOffers = (await resp.json()).pins;
     } catch {
@@ -86,16 +217,18 @@
   }
 
   async function setPin(offer, status) {
+    if (!pseudo && !localStorage.getItem("pseudoAsked")) openPseudoModal();
     await fetch("/api/pins", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ status, offer }),
     });
     await loadPins();
   }
 
   async function unpin(offer) {
-    await fetch("/api/pins?url=" + encodeURIComponent(offer.url), { method: "DELETE" });
+    await fetch("/api/pins?url=" + encodeURIComponent(offer.url),
+                { method: "DELETE", headers: apiHeaders() });
     await loadPins();
   }
 
@@ -122,7 +255,7 @@
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const q = document.getElementById("q").value.trim();
-    const location = document.getElementById("location").value.trim();
+    const location = locationInput.value.trim();
     const radius = document.getElementById("radius").value;
     const sources = [...form.querySelectorAll('input[name="source"]:checked')]
       .map((c) => c.value);
@@ -140,7 +273,7 @@
       const params = new URLSearchParams({
         q, location, sources: sources.join(","), radius_km: radius,
       });
-      const resp = await fetch("/api/search?" + params);
+      const resp = await fetch("/api/search?" + params, { headers: apiHeaders() });
       if (!resp.ok) throw new Error("Erreur serveur (" + resp.status + ")");
       const data = await resp.json();
 
@@ -187,6 +320,8 @@
       list = list.filter((o) => o.remote && o.remote !== "non");
     if (sortSel.value === "date") {
       list.sort((a, b) => (b.published_at || "").localeCompare(a.published_at || ""));
+    } else if (sortSel.value === "relevance") {
+      list.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
     }
 
     countEl.textContent = list.length + " offre" + (list.length > 1 ? "s" : "") +

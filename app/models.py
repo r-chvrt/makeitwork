@@ -26,6 +26,7 @@ class JobOffer(BaseModel):
     logo: Optional[str] = None
     pin_status: Optional[PinStatus] = None   # rempli côté serveur selon les épinglés
     also_on: list[AltLink] = []              # même offre trouvée sur d'autres sites
+    relevance: int = 0                       # score de pertinence vs mots-clés
 
 
 class PinRequest(BaseModel):

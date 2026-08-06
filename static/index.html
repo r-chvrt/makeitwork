@@ -10,15 +10,20 @@
 <body>
   <header class="topbar">
     <div class="container topbar-inner">
-      <h1 class="logo">💼 MakeItWork</h1>
+      <h1 class="logo">💼 Make<span>It</span>Work</h1>
       <nav class="tabs" role="tablist">
         <button id="tab-search" class="tab active" role="tab">Recherche</button>
         <button id="tab-pins" class="tab" role="tab">📌 Épinglées <span id="pin-count" class="pin-count">0</span></button>
       </nav>
-      <button id="theme-toggle" class="theme-toggle" title="Basculer le thème" aria-label="Basculer entre thème clair et sombre">
-        <span class="icon-sun">☀️</span>
-        <span class="icon-moon">🌙</span>
-      </button>
+      <div class="topbar-right">
+        <button id="pseudo-chip" class="pseudo-chip" title="Changer de pseudo">
+          👤 <span id="pseudo-name">invité</span>
+        </button>
+        <button id="theme-toggle" class="theme-toggle" title="Basculer le thème" aria-label="Basculer entre thème clair et sombre">
+          <span class="icon-sun">☀️</span>
+          <span class="icon-moon">🌙</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -30,9 +35,11 @@
           <label for="q">Métier / mots-clés</label>
           <input id="q" type="text" placeholder="ex : développeur python" required>
         </div>
-        <div class="field grow">
+        <div class="field grow autocomplete">
           <label for="location">Zone géographique</label>
-          <input id="location" type="text" placeholder="ex : Paris, Lyon, 33000… (vide = toute la France)">
+          <input id="location" type="text" autocomplete="off"
+                 placeholder="ville ou code postal (vide = toute la France)">
+          <ul id="city-list" class="city-list hidden" role="listbox"></ul>
         </div>
         <div class="field">
           <label for="radius">Rayon</label>
@@ -69,6 +76,13 @@
       </div>
     </div>
 
+    <div class="pin-legend" id="legend-search">
+      <span class="legend-title">Épingler une offre :</span>
+      <span class="legend-item"><span class="pin-dot inline-dot pin-a_postuler"></span> À postuler</span>
+      <span class="legend-item"><span class="pin-dot inline-dot pin-postule"></span> Postulé</span>
+      <span class="legend-item"><span class="pin-dot inline-dot pin-entretien"></span> Entretien</span>
+    </div>
+
     <div id="loader" class="loader hidden">
       <div class="spinner"></div>
       <p>Recherche en cours sur les sites sélectionnés…</p>
@@ -82,6 +96,12 @@
     </div><!-- /view-search -->
 
     <div id="view-pins" class="hidden">
+      <div class="pin-legend">
+        <span class="legend-title">Statuts :</span>
+        <span class="legend-item"><span class="pin-dot inline-dot pin-a_postuler"></span> À postuler</span>
+        <span class="legend-item"><span class="pin-dot inline-dot pin-postule"></span> Postulé</span>
+        <span class="legend-item"><span class="pin-dot inline-dot pin-entretien"></span> Entretien</span>
+      </div>
       <div id="pinned-sections"></div>
       <p id="pins-empty" class="empty-state hidden">
         Aucune offre épinglée pour l'instant. Depuis les résultats de recherche, clique sur une pastille
@@ -96,6 +116,19 @@
   <footer class="container footer">
     <p>MakeItWork agrège les offres publiques de Welcome to the Jungle, Indeed et Hellowork. Les liens renvoient vers l'annonce d'origine.</p>
   </footer>
+
+  <div id="pseudo-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>👋 Bienvenue</h2>
+      <p>Choisis un pseudo pour retrouver tes offres épinglées à tout moment.
+         Reviens avec le même pseudo et tout est là — aucun compte, aucun mot de passe.</p>
+      <input id="pseudo-input" type="text" placeholder="ton pseudo" maxlength="40" autocomplete="off">
+      <div class="modal-actions">
+        <button id="pseudo-skip" class="btn-ghost">Continuer sans pseudo</button>
+        <button id="pseudo-save" class="btn-primary">C'est parti</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

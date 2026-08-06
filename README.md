@@ -29,6 +29,10 @@ API : `GET /api/pins` · `PUT /api/pins` (`{"status": "a_postuler|postule|entret
 | Hellowork | Parsing HTML de la page de recherche + pages détail (en parallèle) pour les résumés |
 
 - **Déduplication** : une offre publiée sur plusieurs sites n'apparaît qu'une fois (similarité titre + entreprise + lieu compatibles). La carte fusionnée garde l'offre la plus complète, récupère les infos manquantes des doublons (ex : le salaire indiqué seulement sur Hellowork), et liste les autres sites en « Aussi sur … ».
+- **Autocomplétion de la ville** : « 14000 » ou « cae » proposent Caen (communes via geo.api.gouv.fr, boost population)
+- **Filtre de pertinence** : les offres sans rapport avec les mots-clés (renvoyées par les sites quand ils manquent de résultats) sont écartées ; tri « Pertinence » disponible
+- **Sessions par pseudo** : à l'ouverture, choisis un pseudo (aucun compte, aucun mot de passe) ; reviens avec le même pseudo et tes épinglés sont là. Le pseudo est envoyé en en-tête `X-Pseudo` et prime sur `X-Forwarded-User`.
+- **Légende** des pastilles d'épinglage visible dans les deux vues
 
 ## Déploiement Docker (derrière Traefik)
 

@@ -4,6 +4,7 @@ import asyncio
 import time
 from pathlib import Path
 
+from curl_cffi.requests import AsyncSession
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from . import db
 from .dedup import dedup_offers
 from .models import PinRequest, SearchResponse
+from .relevance import apply_relevance
 from .scrapers import SCRAPERS
 
 app = FastAPI(title="MakeItWork — agrégateur d'offres d'emploi")
@@ -21,7 +23,11 @@ db.init_db()
 
 
 def _user(request: Request) -> str:
-    """Identité fournie par le SSO (Traefik forward-auth). Sans SSO : liste partagée."""
+    """Identité pour les épinglés : pseudo choisi dans l'interface (X-Pseudo),
+    sinon identité SSO (Traefik forward-auth), sinon liste partagée."""
+    pseudo = (request.headers.get("x-pseudo") or "").strip().lower()
+    if pseudo:
+        return pseudo[:40]
     return request.headers.get("x-forwarded-user") or "default"
 
 
@@ -56,6 +62,9 @@ async def search(
     # fusionner les offres publiées sur plusieurs sites
     results = dedup_offers(results)
 
+    # écarter les offres sans rapport avec les mots-clés
+    results = apply_relevance(results, q)
+
     # tri par date décroissante, offres sans date à la fin
     results.sort(key=lambda o: o.published_at or "0000-00-00", reverse=True)
 
@@ -64,6 +73,31 @@ async def search(
         errors=errors,
         took_ms=int((time.perf_counter() - started) * 1000),
     )
+
+
+@app.get("/api/cities")
+async def cities(q: str = Query(..., min_length=1)):
+    """Autocomplétion de communes françaises : par nom (« cae » → Caen)
+    ou par code postal (« 14000 » → Caen), via geo.api.gouv.fr."""
+    q = q.strip()
+    params = {"limit": "6", "fields": "nom,codesPostaux,codeDepartement", "boost": "population"}
+    if q.isdigit():
+        if len(q) != 5:
+            return {"cities": []}
+        params["codePostal"] = q
+    else:
+        params["nom"] = q
+    async with AsyncSession() as session:
+        r = await session.get("https://geo.api.gouv.fr/communes", params=params, timeout=10)
+    r.raise_for_status()
+    return {"cities": [
+        {
+            "nom": c["nom"],
+            "cp": (c.get("codesPostaux") or [""])[0],
+            "dep": c.get("codeDepartement", ""),
+        }
+        for c in r.json()
+    ]}
 
 
 @app.get("/api/pins")

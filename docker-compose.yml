@@ -4,7 +4,10 @@ services:
     container_name: makeitwork
     restart: unless-stopped
     volumes:
-      - ./data:/app/data          # persistance des épinglés (SQLite)
+      - ./data:/app/data          # persistance SQLite (épinglés + offres scrapées)
+    environment:
+      - SCRAPE_INTERVAL_MINUTES=30   # fréquence de rafraîchissement des recherches suivies
+      - SCRAPE_LIMIT=100             # offres max par site et par recherche
     # Décommenter pour tester sans Traefik :
     # ports:
     #   - "8000:8000"

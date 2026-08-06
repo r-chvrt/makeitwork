@@ -1,7 +1,17 @@
 # -*- coding: utf-8 -*-
-"""API FastAPI : agrège les résultats des scrapers, gère les épinglés, sert l'interface web."""
+"""API FastAPI : recherche dans les offres scrapées en tâche de fond,
+gestion des épinglés, autocomplétion de villes, interface web.
+
+Le scraping ne se fait plus à la volée : un planificateur (app/refresh.py)
+rafraîchit les recherches suivies toutes les SCRAPE_INTERVAL_MINUTES.
+Seule une recherche jamais vue déclenche un scrape immédiat.
+"""
 import asyncio
+import json
+import logging
+import math
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from curl_cffi.requests import AsyncSession
@@ -9,18 +19,25 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db
-from .categorize import categorize, salary_to_annual
-from .dedup import dedup_offers
-from .models import PinRequest, SearchResponse
-from .relevance import apply_relevance
+from . import db, refresh
+from .models import JobOffer, PinRequest, SearchResponse
 from .scrapers import SCRAPERS
 
-app = FastAPI(title="MakeItWork — agrégateur d'offres d'emploi")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 db.init_db()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(refresh.background_loop())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="MakeItWork — agrégateur d'offres d'emploi", lifespan=lifespan)
 
 
 def _user(request: Request) -> str:
@@ -32,55 +49,99 @@ def _user(request: Request) -> str:
     return request.headers.get("x-forwarded-user") or "default"
 
 
+def _facets(offers: list[JobOffer]) -> dict[str, list[tuple[str, int]]]:
+    def count(values):
+        counts: dict[str, int] = {}
+        for v in values:
+            if v:
+                counts[v] = counts.get(v, 0) + 1
+        return sorted(counts.items(), key=lambda kv: -kv[1])
+
+    return {
+        "categories": count(o.category for o in offers),
+        "contracts": count(o.contract for o in offers),
+    }
+
+
 @app.get("/api/search", response_model=SearchResponse)
 async def search(
     request: Request,
     q: str = Query("", description="Métier / mots-clés (vide = toutes les offres de la zone)"),
-    location: str = Query("", description="Zone géographique (ville, département...)"),
-    sources: str = Query("wttj,indeed,hellowork", description="Sources séparées par des virgules"),
-    limit: int = Query(20, ge=1, le=100, description="Nombre max d'offres par source"),
-    radius_km: int = Query(30, ge=5, le=100, description="Rayon de recherche en km"),
+    location: str = Query("", description="Zone géographique"),
+    sources: str = Query("wttj,indeed,hellowork"),
+    radius_km: int = Query(30, ge=5, le=100),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=5, le=50),
+    sort: str = Query("date", pattern="^(date|relevance)$"),
+    category: str = Query(""),
+    contract: str = Query(""),
+    salary_range: str = Query("", description="ex : 30-40 (k€/an)"),
+    remote_only: bool = Query(False),
+    salary_only: bool = Query(False),
 ):
     q = q.strip()
     if not q and not location.strip():
-        return SearchResponse(results=[], errors={}, took_ms=0)
+        return SearchResponse(results=[], total=0, page=1, pages=0,
+                              facets={"categories": [], "contracts": []},
+                              errors={}, took_ms=0)
 
-    wanted = [s.strip() for s in sources.split(",") if s.strip() in SCRAPERS]
     started = time.perf_counter()
 
-    tasks = [SCRAPERS[name](q, location, limit, radius_km) for name in wanted]
-    outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+    row = db.get_or_create_search(q, location, radius_km)
+    errors = json.loads(row.get("last_errors") or "{}")
+    if row["last_scraped_at"] is None:
+        # recherche jamais scrapée : premier scrape en direct
+        errors = await refresh.refresh_search(row)
+        row = db.get_or_create_search(q, location, radius_km)
 
-    results, errors = [], {}
-    for name, outcome in zip(wanted, outcomes):
-        if isinstance(outcome, BaseException):
-            errors[name] = f"{type(outcome).__name__}: {outcome}"
-        else:
-            results.extend(outcome)
+    offers = [JobOffer(**o) for o in db.load_offers(row["id"])]
 
-    # marquer les offres déjà épinglées par cet utilisateur (avant fusion,
-    # pour qu'un doublon épinglé garde son statut sur la carte fusionnée)
-    statuses = db.get_statuses(_user(request), [o.url for o in results])
-    for offer in results:
+    # filtre par site
+    wanted = {s.strip() for s in sources.split(",") if s.strip() in SCRAPERS}
+    offers = [o for o in offers if o.source in wanted]
+
+    # facettes calculées avant les autres filtres (pour garder toutes les options visibles)
+    facets = _facets(offers)
+
+    if category:
+        offers = [o for o in offers if o.category == category]
+    if contract:
+        offers = [o for o in offers if o.contract == contract]
+    if remote_only:
+        offers = [o for o in offers if o.remote and o.remote != "non"]
+    if salary_only:
+        offers = [o for o in offers if o.salary]
+    if salary_range:
+        try:
+            lo, hi = (int(x) for x in salary_range.split("-", 1))
+            offers = [o for o in offers if o.salary_annual is not None
+                      and lo * 1000 <= o.salary_annual < hi * 1000]
+        except ValueError:
+            pass
+
+    if sort == "relevance":
+        offers.sort(key=lambda o: -o.relevance)
+    else:
+        offers.sort(key=lambda o: o.published_at or "0000-00-00", reverse=True)
+
+    total = len(offers)
+    pages = max(1, math.ceil(total / per_page)) if total else 0
+    page = min(page, pages) if pages else 1
+    page_offers = offers[(page - 1) * per_page: page * per_page]
+
+    # statuts d'épinglage (page affichée uniquement)
+    statuses = db.get_statuses(_user(request), [o.url for o in page_offers])
+    for offer in page_offers:
         offer.pin_status = statuses.get(offer.url)
 
-    # fusionner les offres publiées sur plusieurs sites
-    results = dedup_offers(results)
-
-    # écarter les offres sans rapport avec les mots-clés
-    results = apply_relevance(results, q)
-
-    # catégorie de métier et salaire annualisé (pour les filtres du front)
-    for offer in results:
-        offer.category = categorize(offer)
-        offer.salary_annual = salary_to_annual(offer.salary)
-
-    # tri par date décroissante, offres sans date à la fin
-    results.sort(key=lambda o: o.published_at or "0000-00-00", reverse=True)
-
     return SearchResponse(
-        results=results,
+        results=page_offers,
+        total=total,
+        page=page,
+        pages=pages,
+        facets=facets,
         errors=errors,
+        last_scraped_at=row.get("last_scraped_at"),
         took_ms=int((time.perf_counter() - started) * 1000),
     )
 

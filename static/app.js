@@ -1,4 +1,6 @@
-/* MakeItWork — logique front : thème, pseudo, onglets, recherche, autocomplétion, épinglés. */
+/* MakeItWork — logique front : thème, pseudo, onglets, recherche paginée, épinglés.
+   Les filtres et la pagination interrogent le serveur (base locale, réponse
+   instantanée) — le scraping tourne en tâche de fond côté backend. */
 (() => {
   "use strict";
 
@@ -23,6 +25,7 @@
   const errorsEl = document.getElementById("errors");
   const toolbar = document.getElementById("toolbar");
   const countEl = document.getElementById("result-count");
+  const paginationEl = document.getElementById("pagination");
   const filterSalary = document.getElementById("filter-salary");
   const filterRemote = document.getElementById("filter-remote");
   const filterCategory = document.getElementById("filter-category");
@@ -63,8 +66,10 @@
     entretien: "Entretien",
   };
 
-  let allResults = [];   // résultats de la dernière recherche
-  let pinnedOffers = []; // offres épinglées (depuis le serveur)
+  let currentResults = [];  // offres de la page affichée
+  let currentPage = 1;
+  let pinnedOffers = [];    // offres épinglées (depuis le serveur)
+  let hasSearched = false;
 
   /* ---------- Pseudo (session légère, stockée côté serveur) ---------- */
   let pseudo = (localStorage.getItem("pseudo") || "").trim();
@@ -100,9 +105,7 @@
 
   document.getElementById("pseudo-chip").addEventListener("click", openPseudoModal);
   document.getElementById("pseudo-save").addEventListener("click", savePseudo);
-  document.getElementById("pseudo-skip").addEventListener("click", () => {
-    closePseudoModal();
-  });
+  document.getElementById("pseudo-skip").addEventListener("click", closePseudoModal);
   pseudoInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") savePseudo();
     if (e.key === "Escape") closePseudoModal();
@@ -210,13 +213,12 @@
     } catch {
       pinnedOffers = [];
     }
-    // synchroniser le statut sur les résultats de recherche affichés
     const byUrl = Object.fromEntries(pinnedOffers.map((p) => [p.url, p.pin_status]));
-    for (const offer of allResults) offer.pin_status = byUrl[offer.url] || null;
+    for (const offer of currentResults) offer.pin_status = byUrl[offer.url] || null;
 
     pinCountEl.textContent = pinnedOffers.length;
     renderPinned();
-    render();
+    renderResults();
   }
 
   async function setPin(offer, status) {
@@ -254,38 +256,60 @@
     }
   }
 
-  /* ---------- Recherche ---------- */
-  form.addEventListener("submit", async (e) => {
+  /* ---------- Recherche (paginée, servie par la base locale) ---------- */
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
+    // nouvelle recherche : filtres remis à zéro
+    filterCategory.value = "";
+    filterContract.value = "";
+    filterSalaryRange.value = "";
+    filterSalary.checked = false;
+    filterRemote.checked = false;
+    doSearch(1);
+  });
+
+  [filterSalary, filterRemote, filterCategory, filterSalaryRange,
+   filterContract, sortSel].forEach((el) =>
+    el.addEventListener("change", () => { if (hasSearched) doSearch(1); }));
+
+  async function doSearch(page) {
     const q = document.getElementById("q").value.trim();
     const location = locationInput.value.trim();
     const radius = document.getElementById("radius").value;
-    const limit = document.getElementById("limit").value;
     const sources = [...form.querySelectorAll('input[name="source"]:checked')]
       .map((c) => c.value);
 
     if ((!q && !location) || sources.length === 0) return;
 
     btn.disabled = true;
-    loader.classList.remove("hidden");
+    if (!hasSearched) loader.classList.remove("hidden");
     emptyState.classList.add("hidden");
-    toolbar.classList.add("hidden");
     errorsEl.classList.add("hidden");
-    resultsEl.innerHTML = "";
 
     try {
       const params = new URLSearchParams({
-        q, location, sources: sources.join(","), radius_km: radius, limit,
+        q, location, sources: sources.join(","), radius_km: radius,
+        page: String(page), sort: sortSel.value,
       });
+      if (filterCategory.value) params.set("category", filterCategory.value);
+      if (filterContract.value) params.set("contract", filterContract.value);
+      if (filterSalaryRange.value) params.set("salary_range", filterSalaryRange.value);
+      if (filterRemote.checked) params.set("remote_only", "true");
+      if (filterSalary.checked) params.set("salary_only", "true");
       const resp = await fetch("/api/search?" + params, { headers: apiHeaders() });
       if (!resp.ok) throw new Error("Erreur serveur (" + resp.status + ")");
       const data = await resp.json();
 
-      allResults = data.results;
+      hasSearched = true;
+      currentResults = data.results;
+      currentPage = data.page;
       renderErrors(data.errors);
-      populateFilters();
-      render();
+      populateFilters(data.facets);
+      renderCount(data);
+      renderResults();
+      renderPagination(data.page, data.pages);
       toolbar.classList.remove("hidden");
+      if (page !== 1) window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       errorsEl.innerHTML = "";
       addError("La recherche a échoué : " + err.message);
@@ -294,31 +318,37 @@
       btn.disabled = false;
       loader.classList.add("hidden");
     }
-  });
-
-  [filterSalary, filterRemote, filterCategory, filterSalaryRange,
-   filterContract, sortSel].forEach((el) =>
-    el.addEventListener("change", render));
-
-  /* Alimente les selects catégorie et contrat à partir des résultats. */
-  function populateFilters() {
-    fillSelect(filterCategory, "Toutes catégories",
-      countBy(allResults, (o) => o.category));
-    fillSelect(filterContract, "Tous contrats",
-      countBy(allResults, (o) => o.contract));
-    filterSalaryRange.value = "";
   }
 
-  function countBy(list, keyFn) {
-    const counts = new Map();
-    for (const item of list) {
-      const key = keyFn(item);
-      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+  function renderCount(data) {
+    let text = data.total + " offre" + (data.total > 1 ? "s" : "");
+    if (data.pages > 1) text += " · page " + data.page + "/" + data.pages;
+    if (data.last_scraped_at) {
+      text += " · actualisé " + relativeTime(data.last_scraped_at);
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    countEl.textContent = text;
+  }
+
+  /* « 2026-08-06 14:03:12 » (UTC) → « il y a 12 min » */
+  function relativeTime(utcStamp) {
+    const then = new Date(utcStamp.replace(" ", "T") + "Z");
+    const mins = Math.floor((Date.now() - then) / 60000);
+    if (mins < 1) return "à l'instant";
+    if (mins < 60) return "il y a " + mins + " min";
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return "il y a " + hours + " h";
+    return "le " + then.toLocaleDateString("fr-FR");
+  }
+
+  /* Alimente les selects catégorie et contrat à partir des facettes serveur,
+     en conservant la sélection en cours. */
+  function populateFilters(facets) {
+    fillSelect(filterCategory, "Toutes catégories", facets.categories || []);
+    fillSelect(filterContract, "Tous contrats", facets.contracts || []);
   }
 
   function fillSelect(select, allLabel, entries) {
+    const current = select.value;
     select.innerHTML = "";
     const all = document.createElement("option");
     all.value = "";
@@ -330,7 +360,54 @@
       opt.textContent = value + " (" + count + ")";
       select.appendChild(opt);
     }
-    select.value = "";
+    select.value = [...select.options].some((o) => o.value === current) ? current : "";
+  }
+
+  /* ---------- Pagination ---------- */
+  function renderPagination(page, pages) {
+    paginationEl.innerHTML = "";
+    paginationEl.classList.toggle("hidden", pages <= 1);
+    if (pages <= 1) return;
+
+    const mk = (label, target, opts = {}) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.className = "page-btn" + (opts.current ? " current" : "");
+      b.disabled = !!opts.disabled || !!opts.current;
+      if (!b.disabled) b.addEventListener("click", () => doSearch(target));
+      return b;
+    };
+    const ellipsis = () => {
+      const s = document.createElement("span");
+      s.className = "page-ellipsis";
+      s.textContent = "…";
+      return s;
+    };
+
+    paginationEl.appendChild(mk("← Précédent", page - 1, { disabled: page <= 1 }));
+
+    const windowPages = new Set([1, 2, pages - 1, pages,
+                                 page - 1, page, page + 1]);
+    let last = 0;
+    for (let p = 1; p <= pages; p++) {
+      if (!windowPages.has(p)) continue;
+      if (p - last > 1) paginationEl.appendChild(ellipsis());
+      paginationEl.appendChild(mk(String(p), p, { current: p === page }));
+      last = p;
+    }
+
+    paginationEl.appendChild(mk("Suivant →", page + 1, { disabled: page >= pages }));
+  }
+
+  /* ---------- Rendu résultats ---------- */
+  function renderResults() {
+    resultsEl.innerHTML = "";
+    if (hasSearched && currentResults.length === 0) {
+      emptyState.textContent = "Aucune offre ne correspond à ces critères.";
+      emptyState.classList.remove("hidden");
+      return;
+    }
+    for (const offer of currentResults) resultsEl.appendChild(renderCard(offer));
   }
 
   function renderErrors(errors) {
@@ -339,7 +416,8 @@
     if (names.length === 0) return;
     for (const src of names) {
       addError("⚠️ " + (SOURCE_NAMES[src] || src) +
-        " n'a pas répondu correctement — résultats partiels. (" + errors[src] + ")");
+        " n'a pas répondu correctement au dernier scrape — résultats partiels. (" +
+        errors[src] + ")");
     }
     errorsEl.classList.remove("hidden");
   }
@@ -349,41 +427,6 @@
     div.className = "error-item";
     div.textContent = msg;
     errorsEl.appendChild(div);
-  }
-
-  /* ---------- Rendu résultats ---------- */
-  function render() {
-    let list = [...allResults];
-    if (filterSalary.checked) list = list.filter((o) => o.salary);
-    if (filterRemote.checked)
-      list = list.filter((o) => o.remote && o.remote !== "non");
-    if (filterCategory.value)
-      list = list.filter((o) => o.category === filterCategory.value);
-    if (filterContract.value)
-      list = list.filter((o) => o.contract === filterContract.value);
-    if (filterSalaryRange.value) {
-      const [min, max] = filterSalaryRange.value.split("-").map(Number);
-      list = list.filter((o) => o.salary_annual != null &&
-        o.salary_annual >= min * 1000 && o.salary_annual < max * 1000);
-    }
-    if (sortSel.value === "date") {
-      list.sort((a, b) => (b.published_at || "").localeCompare(a.published_at || ""));
-    } else if (sortSel.value === "relevance") {
-      list.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
-    }
-
-    countEl.textContent = list.length + " offre" + (list.length > 1 ? "s" : "") +
-      (list.length !== allResults.length ? " (sur " + allResults.length + ")" : "");
-
-    resultsEl.innerHTML = "";
-    if (allResults.length > 0 && list.length === 0) {
-      emptyState.textContent = "Aucune offre ne correspond à ces critères.";
-      emptyState.classList.remove("hidden");
-      return;
-    }
-    emptyState.classList.add("hidden");
-
-    for (const offer of list) resultsEl.appendChild(renderCard(offer));
   }
 
   function renderCard(o) {

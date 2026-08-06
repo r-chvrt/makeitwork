@@ -401,6 +401,34 @@ option { background: var(--bg-card); color: var(--text); }
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 
+/* ============ Pagination ============ */
+.pagination {
+  display: flex; justify-content: center; align-items: center;
+  gap: 6px; flex-wrap: wrap;
+  padding: 4px 0 34px;
+}
+.page-btn {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 13px;
+  font-size: .9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.page-btn:disabled { opacity: .45; cursor: default; }
+.page-btn.current {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-color: transparent;
+  opacity: 1;
+}
+.page-ellipsis { color: var(--text-muted); padding: 0 2px; }
+
 /* ============ Divers ============ */
 .hidden { display: none !important; }
 .empty-state { text-align: center; color: var(--text-muted); padding: 44px 0; line-height: 1.7; }

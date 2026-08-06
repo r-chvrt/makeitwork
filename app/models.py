@@ -37,6 +37,11 @@ class PinRequest(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    results: list[JobOffer]
-    errors: dict[str, str]               # source -> message d'erreur
+    results: list[JobOffer]              # la page demandée uniquement
+    total: int                           # nb d'offres après filtres
+    page: int
+    pages: int
+    facets: dict[str, list[tuple[str, int]]]  # catégories / contrats disponibles (avec compteurs)
+    errors: dict[str, str]               # source -> message d'erreur (dernier scrape)
+    last_scraped_at: Optional[str] = None  # UTC « YYYY-MM-DD HH:MM:SS »
     took_ms: int

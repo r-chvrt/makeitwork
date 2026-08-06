@@ -1,0 +1,26 @@
+services:
+  makeitwork:
+    build: .
+    container_name: makeitwork
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data          # persistance des épinglés (SQLite)
+    # Décommenter pour tester sans Traefik :
+    # ports:
+    #   - "8000:8000"
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.makeitwork.rule=Host(`makeitwork.chevrot.ovh`)
+      - traefik.http.routers.makeitwork.entrypoints=websecure
+      - traefik.http.routers.makeitwork.tls=true
+      # Middleware SSO (forward-auth) : adapter au nom de ton middleware existant.
+      # Pour des listes d'épinglés séparées par personne, le forward-auth doit
+      # renvoyer l'en-tête X-Forwarded-User (authResponseHeaders).
+      - traefik.http.routers.makeitwork.middlewares=sso@file
+      - traefik.http.services.makeitwork.loadbalancer.server.port=8000
+
+networks:
+  traefik:
+    external: true

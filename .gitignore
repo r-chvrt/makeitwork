@@ -1,0 +1,10 @@
+# environnement
+.venv/
+__pycache__/
+*.pyc
+
+# données locales (épinglés SQLite)
+data/
+
+# config locale Claude Code
+.claude/

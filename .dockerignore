@@ -1,0 +1,10 @@
+.venv/
+.claude/
+data/
+__pycache__/
+**/__pycache__/
+*.pyc
+README.md
+docker-compose.yml
+.dockerignore
+Dockerfile

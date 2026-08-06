@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MakeItWork — Recherche d'emploi multi-sites</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <h1 class="logo">💼 MakeItWork</h1>
+      <nav class="tabs" role="tablist">
+        <button id="tab-search" class="tab active" role="tab">Recherche</button>
+        <button id="tab-pins" class="tab" role="tab">📌 Épinglées <span id="pin-count" class="pin-count">0</span></button>
+      </nav>
+      <button id="theme-toggle" class="theme-toggle" title="Basculer le thème" aria-label="Basculer entre thème clair et sombre">
+        <span class="icon-sun">☀️</span>
+        <span class="icon-moon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="view-search">
+    <form id="search-form" class="search-panel">
+      <div class="fields">
+        <div class="field grow">
+          <label for="q">Métier / mots-clés</label>
+          <input id="q" type="text" placeholder="ex : développeur python" required>
+        </div>
+        <div class="field grow">
+          <label for="location">Zone géographique</label>
+          <input id="location" type="text" placeholder="ex : Paris, Lyon, 33000… (vide = toute la France)">
+        </div>
+        <div class="field">
+          <label for="radius">Rayon</label>
+          <select id="radius">
+            <option value="10">10 km</option>
+            <option value="30" selected>30 km</option>
+            <option value="50">50 km</option>
+            <option value="100">100 km</option>
+          </select>
+        </div>
+      </div>
+      <div class="options">
+        <fieldset class="sources">
+          <legend>Sites</legend>
+          <label><input type="checkbox" name="source" value="wttj" checked> Welcome to the Jungle</label>
+          <label><input type="checkbox" name="source" value="indeed" checked> Indeed</label>
+          <label><input type="checkbox" name="source" value="hellowork" checked> Hellowork</label>
+        </fieldset>
+        <button type="submit" class="btn-primary" id="search-btn">Rechercher</button>
+      </div>
+    </form>
+
+    <div id="errors" class="errors hidden"></div>
+
+    <div id="toolbar" class="toolbar hidden">
+      <span id="result-count" class="result-count"></span>
+      <div class="toolbar-filters">
+        <label><input type="checkbox" id="filter-salary"> Salaire indiqué</label>
+        <label><input type="checkbox" id="filter-remote"> Télétravail</label>
+        <select id="sort">
+          <option value="date">Plus récentes d'abord</option>
+          <option value="relevance">Pertinence</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="loader" class="loader hidden">
+      <div class="spinner"></div>
+      <p>Recherche en cours sur les sites sélectionnés…</p>
+    </div>
+
+    <section id="results" class="results"></section>
+
+    <p id="empty-state" class="empty-state">
+      Lance une recherche pour voir les offres de Welcome to the Jungle, Indeed et Hellowork réunies ici.
+    </p>
+    </div><!-- /view-search -->
+
+    <div id="view-pins" class="hidden">
+      <div id="pinned-sections"></div>
+      <p id="pins-empty" class="empty-state hidden">
+        Aucune offre épinglée pour l'instant. Depuis les résultats de recherche, clique sur une pastille
+        <span class="pin-dot pin-a_postuler inline-dot"></span>
+        <span class="pin-dot pin-postule inline-dot"></span>
+        <span class="pin-dot pin-entretien inline-dot"></span>
+        pour suivre une offre.
+      </p>
+    </div>
+  </main>
+
+  <footer class="container footer">
+    <p>MakeItWork agrège les offres publiques de Welcome to the Jungle, Indeed et Hellowork. Les liens renvoient vers l'annonce d'origine.</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

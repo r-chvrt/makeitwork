@@ -50,10 +50,15 @@ def _parse_remote(text: str) -> str | None:
     return "partiel"
 
 
+PAGE_SIZE = 30  # cartes par page de résultats
+_summary_semaphore = asyncio.Semaphore(10)  # pages détail simultanées max
+
+
 async def _fetch_summary(session: AsyncSession, url: str) -> str | None:
     """Récupère la description sur la page détail de l'offre."""
     try:
-        r = await session.get(url, timeout=15)
+        async with _summary_semaphore:
+            r = await session.get(url, timeout=15)
         if r.status_code != 200:
             return None
         soup = BeautifulSoup(r.text, "html.parser")
@@ -64,17 +69,36 @@ async def _fetch_summary(session: AsyncSession, url: str) -> str | None:
         return None
 
 
+async def _fetch_page(session: AsyncSession, params: dict, page: int) -> list:
+    r = await session.get(SEARCH_URL, params={**params, "p": str(page)}, timeout=30)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+    return soup.select('[data-id-storage-target="item"]')
+
+
 async def search_hellowork(query: str, location: str = "", limit: int = 15,
                            radius_km: int = 30) -> list[JobOffer]:
     params = {"k": query}
     if location:
         params["l"] = location
         params["d"] = str(radius_km)  # rayon en km
+    nb_pages = -(-limit // PAGE_SIZE)  # arrondi supérieur
     async with AsyncSession(impersonate="chrome") as session:
-        r = await session.get(SEARCH_URL, params=params, timeout=30)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        cards = soup.select('[data-id-storage-target="item"]')[:limit]
+        pages = await asyncio.gather(
+            *(_fetch_page(session, params, p) for p in range(1, nb_pages + 1)),
+            return_exceptions=True,
+        )
+        cards, seen_ids = [], set()
+        for page in pages:
+            if isinstance(page, BaseException):
+                continue  # une page en erreur n'empêche pas les autres
+            for card in page:
+                card_id = card.get("data-id-storage-item-id")
+                if card_id and card_id in seen_ids:
+                    continue
+                seen_ids.add(card_id)
+                cards.append(card)
+        cards = cards[:limit]
 
         offers: list[JobOffer] = []
         for card in cards:

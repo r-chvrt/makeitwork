@@ -58,11 +58,21 @@
   --shadow-hover: 0 2px 4px rgba(0, 0, 0, .4), 0 10px 28px rgba(0, 0, 0, .5);
 }
 
+/* ============ Police ============ */
+@font-face {
+  font-family: "Inter";
+  src: url("/static/fonts/inter-latin.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ============ Base ============ */
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-optical-sizing: auto;
   background: var(--bg-gradient), var(--bg);
   background-attachment: fixed;
   color: var(--text);
@@ -141,12 +151,13 @@ a { color: var(--accent); }
 .field.grow { flex: 1 1 220px; }
 .field label { font-size: .78rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .field input, .field select {
-  background: var(--bg-input);
+  background-color: var(--bg-input);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 11px 13px;
   font-size: .95rem;
+  font-family: inherit;
   transition: border-color .15s, box-shadow .15s;
 }
 .field input:focus, .field select:focus {
@@ -154,6 +165,19 @@ a { color: var(--accent); }
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
+
+/* selects : flèche custom, même rendu partout */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%238a94a8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 34px !important;
+  cursor: pointer;
+}
+select:hover { border-color: var(--border-strong); }
+option { background: var(--bg-card); color: var(--text); }
 
 .options { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
 .sources { border: none; margin: 0; padding: 0; display: flex; gap: 16px; flex-wrap: wrap; }
@@ -214,13 +238,29 @@ a { color: var(--accent); }
 .city-list li .city-meta { color: var(--text-muted); font-size: .84rem; }
 .city-list li:hover, .city-list li.highlighted { background: var(--badge-muted-bg); }
 
+/* scrollbars fines et discrètes (listes défilantes + page) */
+.city-list, .toolbar-filters select {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.city-list::-webkit-scrollbar { width: 8px; }
+.city-list::-webkit-scrollbar-track { background: transparent; }
+.city-list::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+.city-list::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
 /* ============ Toolbar / légende / erreurs ============ */
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .toolbar-filters { display: flex; gap: 16px; align-items: center; font-size: .9rem; flex-wrap: wrap; }
 .toolbar-filters input { accent-color: var(--accent); }
 .toolbar-filters select {
-  background: var(--bg-input); color: var(--text);
-  border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+  background-color: var(--bg-input); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  font-family: inherit; font-size: .88rem;
+  max-width: 210px;
+  transition: border-color .15s;
 }
 .result-count { color: var(--text-muted); font-size: .9rem; }
 
@@ -266,9 +306,14 @@ a { color: var(--accent); }
 .badge-remote { background: var(--badge-remote-bg); color: var(--badge-remote-text); }
 .badge-muted { background: var(--badge-muted-bg); color: var(--badge-muted-text); font-weight: 500; }
 
+/* date de publication : badge dont la couleur reflète la fraîcheur */
+.badge-date { display: inline-flex; align-items: center; gap: 5px; cursor: default; }
+.badge-date-fresh { background: var(--badge-salary-bg); color: var(--badge-salary-text); }
+.badge-date-recent { background: var(--badge-remote-bg); color: var(--badge-remote-text); }
+.badge-date-old { background: var(--badge-muted-bg); color: var(--badge-muted-text); font-weight: 500; }
+
 .card-summary { color: var(--text); font-size: .92rem; line-height: 1.55; margin: 12px 0; opacity: .92; }
-.card-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-.card-date { color: var(--text-muted); font-size: .84rem; }
+.card-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .card-links { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .card-alt { color: var(--text-muted); font-size: .84rem; }
 .card-alt a { color: var(--text-muted); }

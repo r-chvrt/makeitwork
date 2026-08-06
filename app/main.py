@@ -38,7 +38,7 @@ async def search(
     q: str = Query("", description="Métier / mots-clés (vide = toutes les offres de la zone)"),
     location: str = Query("", description="Zone géographique (ville, département...)"),
     sources: str = Query("wttj,indeed,hellowork", description="Sources séparées par des virgules"),
-    limit: int = Query(15, ge=1, le=30, description="Nombre max d'offres par source"),
+    limit: int = Query(20, ge=1, le=100, description="Nombre max d'offres par source"),
     radius_km: int = Query(30, ge=5, le=100, description="Rayon de recherche en km"),
 ):
     q = q.strip()

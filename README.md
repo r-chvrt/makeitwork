@@ -35,6 +35,9 @@ API : `GET /api/pins` · `PUT /api/pins` (`{"status": "a_postuler|postule|entret
 - **Légende** des pastilles d'épinglage visible dans les deux vues
 - **Recherche sans mots-clés** : laisser le champ métier vide pour voir toutes les offres d'une ville
 - **Filtres avancés** : catégorie de métier (classifieur par mots-clés du titre, homogène sur les 3 sites), tranche de salaire (montants mensuels / journaliers / horaires annualisés automatiquement) et type de contrat — les listes se remplissent selon les résultats, avec compteurs
+- **Volume réglable** : 20, 50 ou 100 offres par site (Hellowork est paginé automatiquement, ses pages détail sont récupérées avec 10 requêtes simultanées max)
+- **Date mise en avant** : badge coloré selon la fraîcheur (vert ≤ 1 jour, bleu ≤ 7 jours, gris au-delà), date exacte au survol
+- Police Inter (variable) auto-hébergée dans `static/fonts/` — aucun appel à un CDN au chargement
 
 ## Déploiement Docker (derrière Traefik)
 

@@ -260,6 +260,7 @@
     const q = document.getElementById("q").value.trim();
     const location = locationInput.value.trim();
     const radius = document.getElementById("radius").value;
+    const limit = document.getElementById("limit").value;
     const sources = [...form.querySelectorAll('input[name="source"]:checked')]
       .map((c) => c.value);
 
@@ -274,7 +275,7 @@
 
     try {
       const params = new URLSearchParams({
-        q, location, sources: sources.join(","), radius_km: radius,
+        q, location, sources: sources.join(","), radius_km: radius, limit,
       });
       const resp = await fetch("/api/search?" + params, { headers: apiHeaders() });
       if (!resp.ok) throw new Error("Erreur serveur (" + resp.status + ")");
@@ -417,6 +418,7 @@
 
     const badges = document.createElement("div");
     badges.className = "badges";
+    badges.appendChild(dateBadge(o));
     badges.appendChild(badge(SOURCE_NAMES[o.source] || o.source, "badge-source-" + o.source));
     if (o.contract) badges.appendChild(badge(o.contract, "badge-muted"));
     badges.appendChild(o.salary
@@ -441,11 +443,6 @@
 
     const footer = document.createElement("div");
     footer.className = "card-footer";
-    const dateSpan = document.createElement("span");
-    dateSpan.className = "card-date";
-    dateSpan.textContent = o.published_at
-      ? "Publiée " + relativeDate(o.published_at)
-      : "Date non précisée";
     const links = document.createElement("span");
     links.className = "card-links";
     if (o.also_on && o.also_on.length > 0) {
@@ -470,7 +467,7 @@
     link.rel = "noopener";
     link.textContent = "Voir l'annonce ↗";
     links.appendChild(link);
-    footer.append(dateSpan, links);
+    footer.append(links);
     card.appendChild(footer);
 
     return card;
@@ -505,6 +502,22 @@
     span.className = "badge " + cls;
     span.textContent = text;
     return span;
+  }
+
+  /* Badge de date : couleur selon la fraîcheur, date exacte au survol. */
+  function dateBadge(o) {
+    if (!o.published_at) return badge("📅 Date non précisée", "badge-date badge-date-old");
+    const days = Math.floor((Date.now() - new Date(o.published_at + "T00:00:00")) / 86400000);
+    const cls = days <= 1 ? "badge-date-fresh" : days <= 7 ? "badge-date-recent" : "badge-date-old";
+    const b = badge("📅 " + capitalize(relativeDate(o.published_at)), "badge-date " + cls);
+    b.title = "Publiée le " + new Date(o.published_at + "T00:00:00").toLocaleDateString("fr-FR", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+    return b;
+  }
+
+  function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
   function relativeDate(iso) {
